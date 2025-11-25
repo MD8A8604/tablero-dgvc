@@ -1,0 +1,1561 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tablero de actividades DGVC</title>
+    
+    <!-- PapaParse for fast CSV parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <!-- SheetJS ONLY for Excel export (writing) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- IMPORTANTE: Noto Sans desde Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #F2F2F7;
+            color: #1C1C1E; 
+            line-height: 1.4;
+            overflow-x: hidden;
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+            position: relative;
+        }
+
+        /* --- Sidebar Styles --- */
+        .sidebar {
+            width: 280px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: 30px 20px;
+            box-shadow: 2px 0 20px rgba(0,0,0,0.05);
+            overflow-y: auto;
+            position: fixed;
+            height: 100vh;
+            z-index: 2000;
+            left: 0;
+            border-right: 1px solid rgba(0,0,0,0.05);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .sidebar h2 {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: #1C1C1E;
+            letter-spacing: -0.5px;
+        }
+
+        .filter-group {
+            margin-bottom: 20px;
+        }
+
+        .filter-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: #1C1C1E;
+            margin-bottom: 8px;
+        }
+
+        .filter-group select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid rgba(0,0,0,0.1);
+            border-radius: 10px;
+            font-size: 15px;
+            background: rgba(118, 118, 128, 0.12);
+            color: #1C1C1E;
+            cursor: pointer;
+            appearance: none; 
+            transition: all 0.2s;
+            font-family: 'Noto Sans', sans-serif;
+        }
+
+        .filter-group select:focus {
+            outline: none;
+            background: white;
+            border-color: #007AFF;
+        }
+
+        .reset-btn {
+            width: 100%;
+            padding: 14px;
+            background: #007AFF; 
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: transform 0.1s;
+            font-family: 'Noto Sans', sans-serif;
+        }
+
+        .reset-btn:active {
+            transform: scale(0.98);
+        }
+
+        /* --- Main Content Styles --- */
+        .main-content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 20px;
+            padding-top: 60px;
+            position: relative;
+            max-width: calc(100% - 280px);
+            transition: margin-left 0.3s ease;
+        }
+
+        /* --- Header Styles --- */
+        .header {
+            margin-bottom: 25px;
+            text-align: left;
+        }
+
+        .header h1 {
+            font-size: 34px;
+            font-weight: 700;
+            margin-bottom: 4px;
+            letter-spacing: -0.5px;
+            color: #1C1C1E;
+        }
+
+        .header p {
+            color: #8e8e93;
+            font-size: 17px;
+            font-weight: 400;
+        }
+
+        /* --- iOS Health Card Styles --- */
+        .cards-grid {
+            display: grid;
+            /* Default mobile/tablet behavior */
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); 
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+
+        /* Clase especifica para el grid de detalle de 3 columnas */
+        .cards-grid.metrics-3col {
+             grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); 
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04); 
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            height: 150px;
+            cursor: pointer;
+            transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        .card:active {
+            transform: scale(0.96);
+        }
+
+        .card.featured {
+            color: white; 
+        }
+        .card.featured .card-value, 
+        .card.featured .card-label,
+        .card.featured .card-unit {
+            color: white; 
+        }
+        .card.featured .card-icon {
+            color: white; 
+        }
+        .card.featured .card-icon img {
+             mix-blend-mode: multiply;
+             filter: contrast(1.2); 
+        }
+
+        .card-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        .card-label {
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: -0.2px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            line-height: 1.2;
+            max-width: 75%;
+        }
+        
+        .card-icon {
+            width: 30px; 
+            height: 30px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: flex-end;
+            transition: all 0.3s ease;
+            overflow: visible; 
+        }
+
+        .card-icon.custom-logo-xl {
+            width: 32px;   
+            height: 32px;  
+            margin-top: -4px; 
+            margin-right: 8px; 
+        }
+        
+        .card-icon svg {
+            width: 100%;
+            height: 100%;
+            stroke-width: 2.5;
+        }
+        
+        .card-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain; 
+        }
+        
+        .card-icon.custom-logo-xl svg {
+            transform: scale(7.5); 
+            transform-origin: 38% 38%; 
+        }
+        
+        .icon-orange { color: #465293; }
+        .icon-blue { color: #a34cfa; }   
+        .icon-green { color: #a57f2c; }  
+        .icon-purple { color: #8b0aa5; } 
+        .icon-pink { color: #32CD32; }   
+
+        .card-content {
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            align-items: flex-start;
+        }
+
+        .card-value {
+            font-size: 34px;
+            font-weight: 600;
+            color: #1C1C1E; 
+            line-height: 1;
+            letter-spacing: -0.5px;
+        }
+
+        .card-unit {
+            font-size: 13px;
+            color: #8e8e93;
+            margin-top: 4px;
+            font-weight: 500;
+        }
+        
+        /* Specific Card Styles */
+        .card.semilleros-card .card-label { color: #465293; }
+        .card.convites-card .card-label { color: #a34cfa; }
+        .card.convites-card .card-icon { color: #a34cfa; }
+        .card.cine-card .card-label { color: #a57f2c; }
+        .card.cine-card .card-icon { color: #a57f2c; }
+        .card.paice24-card .card-label { color: #8b0aa5; }
+        .card.paice24-card .card-icon { color: #8b0aa5; }
+        .card.paice25-card .card-label { color: #32CD32; }
+        .card.paice25-card .card-icon { color: #32CD32; }
+
+        .card.metric-link, .card.mapa-link {
+            background: white;
+            border: 2px dashed #636366;
+            border-style: dashed;
+        }
+        .card.metric-link { border-style: solid; border-width: 1px; border-color: rgba(0,0,0,0.1); }
+        .card.mapa-link { border-style: dashed; border-width: 2px; border-color: #636366; }
+        .card.metric-link .card-label, .card.mapa-link .card-label { color: #636366; }
+        .card.metric-link .card-value { color: #1C1C1E; } 
+        .card.mapa-link .card-value { color: #636366; }
+        .card.metric-link .card-icon, .card.mapa-link .card-icon { color: #636366; }
+        .card.metric-link .card-unit { color: #8e8e93; } 
+        .card.mapa-link { justify-content: center; align-items: center; }
+        .card.mapa-link .card-icon { width: 32px; height: 32px; margin-bottom: 5px; justify-content: center; align-items: center; }
+
+
+        /* --- Program Detail Cards (Subtypes) --- */
+        .program-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 12px;
+            margin-bottom: 30px;
+        }
+
+        .program-card {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            border-left: 4px solid transparent;
+        }
+        
+        .program-card:hover { background: #f2f2f7; }
+        .program-card .program-name { font-size: 13px; font-weight: 600; color: #1C1C1E; }
+        .program-card .program-value { font-size: 24px; font-weight: 700; color: #1C1C1E; }
+        .program-card .card-icon { align-self: flex-end; width: 20px; height: 20px; color: #8e8e93; }
+        .program-card .card-icon svg { width: 20px; height: 20px; }
+        .program-card .card-icon img { width: 100%; height: 100%; object-fit: contain; }
+
+
+        /* --- Table & Search Styles --- */
+        .table-section {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 30px;
+        }
+
+        .table-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap; /* Allow wrapping on small screens */
+            gap: 10px;
+        }
+
+        .table-section h3 {
+            font-size: 19px;
+            font-weight: 700;
+            color: #1C1C1E;
+        }
+
+        .table-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Search Input Styling */
+        .search-container {
+            position: relative;
+            width: 250px; /* Wider search for global feel */
+        }
+        .search-input {
+            width: 100%;
+            padding: 8px 32px 8px 12px;
+            border-radius: 10px;
+            border: 1px solid #e5e5ea;
+            background: #f2f2f7;
+            font-size: 13px;
+            color: #1C1C1E;
+            font-family: 'Noto Sans', sans-serif;
+            outline: none;
+            transition: all 0.2s;
+        }
+        .search-input:focus {
+            background: white;
+            border-color: #007AFF;
+            box-shadow: 0 0 0 2px rgba(0,122,255,0.1);
+        }
+        .search-icon {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #8e8e93;
+            width: 14px;
+            height: 14px;
+            pointer-events: none;
+        }
+
+        .download-btn {
+            background: rgba(52, 199, 89, 0.1);
+            color: #34C759;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: background 0.2s;
+            font-family: 'Noto Sans', sans-serif;
+        }
+        .download-btn:hover { background: rgba(52, 199, 89, 0.2); }
+
+        .table-container {
+            width: 100%;
+            overflow-x: auto; 
+            -webkit-overflow-scrolling: touch; 
+            flex: 1; 
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 1200px; /* Force scroll */
+            font-size: 13px;
+        }
+
+        thead { border-bottom: 1px solid #e5e5ea; }
+        th {
+            text-align: left;
+            padding: 12px 10px;
+            font-weight: 500;
+            color: #8e8e93;
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+        td {
+            padding: 14px 10px;
+            border-bottom: 1px solid #f2f2f7;
+            color: #1C1C1E;
+            font-weight: 400;
+            vertical-align: top;
+        }
+        tr:last-child td { border-bottom: none; }
+        
+        .table-cell-content {
+            max-width: 250px;
+            white-space: normal;
+        }
+
+        /* --- Navigation Buttons --- */
+        #home-button {
+            display: none;
+            position: absolute;
+            top: 50px; 
+            right: 20px;
+            z-index: 50;
+            background: rgba(255,255,255,0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0,0,0,0.1);
+            color: #007AFF;
+            font-size: 16px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        #filter-toggle-button {
+            display: none; 
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            background: white;
+            color: #1C1C1E;
+            border-radius: 50%;
+            font-size: 18px;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+            z-index: 2100;
+            align-items: center;
+            justify-content: center;
+            border: none;
+        }
+
+        #back-button {
+            position: fixed; 
+            bottom: 30px;
+            right: 30px;
+            z-index: 900;
+            width: 56px;
+            height: 56px;
+            background: #000000;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            font-size: 24px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+            transition: transform 0.2s;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+        #back-button:active { transform: scale(0.9); }
+
+        /* --- Modals --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(4px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 3000;
+            visibility: hidden;
+            opacity: 0;
+            transition: all 0.3s;
+        }
+        .modal-overlay.active { visibility: visible; opacity: 1; }
+        .modal-content {
+            background: #F2F2F7;
+            padding: 0;
+            border-radius: 14px;
+            width: 90%;
+            max-width: 400px;
+            max-height: 70vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .modal-header {
+            background: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #e5e5ea;
+        }
+        .modal-list-container { padding: 0; overflow-y: auto; background: white; }
+        .modal-list li {
+            padding: 12px 20px;
+            border-bottom: 1px solid #e5e5ea;
+            font-size: 15px;
+        }
+
+        .sidebar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.3);
+            backdrop-filter: blur(4px);
+            z-index: 1900;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
+        }
+        .sidebar-overlay.active { opacity: 1; visibility: visible; }
+
+        /* --- DESKTOP ADAPTATION (Media Query) --- */
+        @media (min-width: 1024px) {
+            /* REGLA 4: Escritorio 4 tarjetas por fila */
+            .cards-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+            /* GRID DE DETALLE: 3 columnas para que se vea 3 arriba y 2 abajo (5 items) */
+            .cards-grid.metrics-3col {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar { 
+                left: auto; 
+                right: 0; 
+                transform: translateX(100%); 
+                width: 80%;
+                max-width: 300px;
+                box-shadow: -5px 0 30px rgba(0,0,0,0.15);
+                border-left: 1px solid rgba(255,255,255,0.2);
+            }
+            .sidebar.active { transform: translateX(0); }
+            .main-content { 
+                margin-left: 0; 
+                padding: 20px;
+                padding-top: 80px; 
+                max-width: 100%; 
+            }
+            .cards-grid {
+                grid-template-columns: 1fr 1fr; 
+                gap: 12px;
+            }
+            /* En móvil mantenemos 2 columnas o 1 según prefieras, hereda 1fr 1fr */
+            .cards-grid.metrics-3col {
+                grid-template-columns: 1fr 1fr;
+            }
+            
+            .card {
+                padding: 14px;
+                height: 140px;
+            }
+            .card-value { font-size: 28px; }
+            .card-label { font-size: 13px; }
+            .header h1 { font-size: 28px; }
+            #filter-toggle-button { display: flex; }
+            #home-button { top: 20px; right: 70px; background: transparent; border: none; }
+        }
+        
+        .loading { text-align: center; padding: 60px 20px; color: #8e8e93; font-weight: 500; }
+        .error-msg { text-align: center; padding: 40px; color: #FF3B30; font-weight: 500; }
+    </style>
+</head>
+<body>
+    <!-- Backdrop overlay for mobile menu -->
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <!-- Modal -->
+    <div id="list-modal" class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 id="modal-title" style="font-size: 17px; font-weight: 600;">Listado</h4>
+                <button class="modal-close" onclick="closeModal(event)" style="border:none; background:none; font-size: 24px; color:#8e8e93;">&times;</button>
+            </div>
+            <div class="modal-list-container">
+                <ul id="modal-list" class="modal-list"></ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <h2 style="margin-top: 20px;">Filtros</h2>
+            <div style="height: 1px; background: #e5e5ea; margin-bottom: 20px;"></div>
+            
+            <div class="filter-group">
+                <label>Estrategia</label>
+                <select id="filtro-programa"><option value="">Todos</option></select>
+            </div>
+            <input type="hidden" id="filtro-subtipo" value="">
+            <div class="filter-group">
+                <label>Región</label>
+                <select id="filtro-region"><option value="">Todas</option></select>
+            </div>
+            <div class="filter-group">
+                <label>Estado</label>
+                <select id="filtro-estado"><option value="">Todos</option></select>
+            </div>
+            <button class="reset-btn" onclick="resetearFiltros()">Borrar Filtros</button>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <button id="filter-toggle-button" onclick="toggleSidebar()">
+                <i data-lucide="menu"></i>
+            </button>
+
+            <div class="header">
+                <h1 id="main-title">Tablero de actividades DGVC</h1>
+                <p id="main-subtitle">Da clic para conocer más información</p>
+                <button id="home-button" onclick="resetearFiltros()">Inicio</button>
+            </div>
+
+            <div id="loading" class="loading">Conectando con Google Sheets...</div>
+            <div id="error-message" class="error-msg" style="display:none;"></div>
+
+            <div id="content" style="display: none;">
+                <!-- Home View -->
+                <div id="home-view">
+                    <div class="cards-grid">
+                        
+                        <!-- Semilleros -->
+                        <div class="card program-link semilleros-card" onclick="navegarAPrograma('Semilleros Creativos')">
+                            <div class="card-header-row">
+                                <div class="card-label">Semilleros Creativos</div>
+                                <div class="card-icon icon-orange custom-logo-xl">
+                                    <svg viewBox="0 0 210 297" preserveAspectRatio="xMidYMid meet" version="1.1" xmlns="http://www.w3.org/2000/svg"><g transform="matrix(0.26458333,0,0,0.26458333,80.604422,112.37728)" style="fill:#465293"><path d="m 0,0 h 5 l 6,8 4,4 7,10 4,-2 4,-5 8,-7 6,-5 1,-2 h 6 l 7,10 6,12 4,6 5,11 8,20 3,11 2,11 v 14 l -3,10 -4,6 -8,7 -8,3 -7,1 H 36 l -16,-1 h -35 l -10,-1 -15,4 h -18 l -18,5 -9,1 h -14 l -9,-2 -9,-5 v -2 h -2 l -5,-8 -3,-9 V 79 l 5,-23 6,-18 5,-13 8,-16 h 5 l 18,13 7,5 4,-16 3,-7 h 6 l 14,8 9,6 7,4 9,6 2,-4 9,-13 h 2 l 2,-5 z m 5,13 v 19 l 2,9 3,-2 v -2 h 2 L 17,31 16,26 6,13 Z m 39,0 -10,9 -9,9 -5,6 v 2 H 18 L 8,52 2,62 l -4,7 -3,8 -1,6 v 9 l 2,6 8,-1 8,-5 v -2 l 4,-2 1,-3 3,-1 9,-16 5,-12 6,-18 5,-25 z m -106,4 -3,7 -4,17 -3,13 -2,18 v 16 l 2,12 5,10 6,5 8,-9 4,-11 1,-5 V 68 l -4,-21 -5,-17 -4,-13 z m 11,1 z m 1,1 7,11 7,9 1,3 h 2 v 2 h 2 l 5,-10 h -2 v -2 l -11,-7 -9,-6 z m -46,1 3,10 3,9 5,12 4,9 2,-3 2,-12 1,-3 v -8 l -8,-6 h -2 v -2 h -3 v -2 z m 89,0 -3,4 v 2 h -2 l -7,11 -6,9 v 3 h -2 l -8,17 -4,13 -1,4 v 12 l 3,8 h 2 l 2,4 8,5 9,3 4,-1 -3,-7 -2,-12 V 83 l 3,-24 5,-24 3,-11 z m 60,0 2,16 1,20 v 24 l -1,14 -3,12 -6,11 h 8 l 11,-3 8,-6 5,-10 V 79 L 72,58 67,46 62,35 57,25 54,20 Z m -108,1 1,2 z m 54,0 -4,14 -4,19 -2,13 1,4 6,-12 6,-9 V 36 L 0,21 Z m 49,0 -4,16 -4,15 -8,20 -6,10 -9,11 -8,6 -9,3 5,5 10,5 10,3 14,1 6,-5 5,-13 2,-14 V 51 L 50,27 49,21 Z m -102,2 2,9 4,16 2,7 2,15 h 1 l 3,-10 5,-10 -6,-11 -9,-12 z m -51,8 -3,7 -5,15 -5,19 -2,16 v 9 l 3,13 2,5 h 2 l 2,4 7,4 8,2 h 7 l 5,-1 -6,-8 -5,-12 -3,-11 -3,-20 -3,-42 z m 7,0 v 32 l 3,24 4,17 6,12 7,6 8,-1 3,-2 -4,-2 v -2 h -2 l -2,-5 -3,-6 -2,-8 -1,-28 -7,-13 -4,-11 -3,-7 -2,-6 z m 86,41 1,3 z m 0,27 1,6 3,7 4,4 H 7 l -3,-2 -8,-5 -4,-5 z m -35,3 -5,10 -1,3 h -2 v 2 l 3,1 h 10 l 9,-2 -5,-5 -4,-4 -3,-5 z" /></g></svg>`;
+
+        const INPI_SVG = `<svg viewBox="56 56 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <g transform="translate(256, 256) rotate(-45) translate(-256, -256)">
+        <rect x="236" y="50" width="40" height="412" rx="20" fill="currentColor"/>
+        <path d="M246 60 L246 452" stroke="currentColor" stroke-width="12" stroke-linecap="round"/>
+        <path d="M276 100 C 320 150, 400 250, 380 400" stroke="currentColor" stroke-width="24" fill="none" stroke-linecap="round"/>
+        <path d="M276 100 C 300 150, 360 250, 320 380" stroke="currentColor" stroke-width="24" fill="none" stroke-linecap="round"/>
+        <path d="M276 100 C 280 140, 300 220, 240 300" stroke="currentColor" stroke-width="24" fill="none" stroke-linecap="round"/>
+        <path d="M276 100 C 260 130, 220 200, 160 220" stroke="currentColor" stroke-width="24" fill="none" stroke-linecap="round"/>
+        <rect x="234" y="90" width="44" height="30" rx="4" fill="currentColor"/>
+        <rect x="234" y="90" width="44" height="7" fill="currentColor"/>
+        <rect x="234" y="97" width="44" height="7" fill="currentColor"/>
+        <rect x="234" y="104" width="44" height="7" fill="currentColor"/>
+        <rect x="234" y="111" width="44" height="7" fill="currentColor"/>
+        </g>
+        </svg>`;
+        
+        const CONVITES_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 24 24"><path fill="currentColor" d="M.25 2c0 .098.876 5.92.876 5.92a.974.974 0 0 0 1.694.506l3.27-3.69a.52.52 0 0 1 .507-.146l1.265.38c.185.05.32.209.341.4l.672 4.867a.974.974 0 0 0 1.694.516l3.31-3.72a.5.5 0 0 1 .496-.145l.974.282c.183.053.317.21.34.4l.672 4.78a.97.97 0 0 0 .682.798a.97.97 0 0 0 .973-.283l3.271-3.64a.48.48 0 0 1 .468-.166q.427.172.886.214a.983.983 0 1 0 .272-1.947L1.496 1.066a.973.973 0 0 0-1.246.662a1 1 0 0 0 0 .273m22.284 11.692L1.116 16.127a.98.98 0 1 0 .214 1.947h.302a.49.49 0 0 1 .477.233l2.444 4.186a.973.973 0 0 0 1.762-.155l1.664-4.712a.5.5 0 0 1 .41-.321l.973-.108a.5.5 0 0 1 .477.244l2.453 4.206a.974.974 0 0 0 1.762-.166l1.675-4.731a.5.5 0 0 1 .408-.322l.847-.097a.49.49 0 0 1 .468.243l2.365 4.07a.973.973 0 0 0 1.753-.166l2.044-5.656a.974.974 0 0 0-1.08-1.13"/></svg>`;
+
+        // GLOBAL DATA STORES
+        let datosOriginales = [];   // Data from MAPA_DGVC (Sheet 1)
+        let datosConvites = [];     // Data from DAC_Reporte (Sheet 2)
+        
+        let datosFiltrados = [];
+        let currentTableData = []; 
+        let isHomeView = true;
+
+        // Elements
+        const homeButton = document.getElementById('home-button');
+        const filterToggleButton = document.getElementById('filter-toggle-button');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebar-overlay');
+        const filtroPrograma = document.getElementById('filtro-programa');
+        const filtroSubtipo = document.getElementById('filtro-subtipo');
+        const filtroRegion = document.getElementById('filtro-region');
+        const filtroEstado = document.getElementById('filtro-estado');
+        const listModal = document.getElementById('list-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalList = document.getElementById('modal-list');
+        const programFeaturedIcon = document.getElementById('program-featured-icon');
+        const backButton = document.getElementById('back-button');
+        const featuredCard = document.getElementById('featured-card');
+        const tablaBuscador = document.getElementById('tabla-buscador');
+
+        // REGION MAP
+        const REGIONES_MAP = {
+            'Baja California': 'Norte', 'Baja California Sur': 'Norte', 'Chihuahua': 'Norte', 'Durango': 'Norte', 'Sonora': 'Norte', 'Zacatecas': 'Norte',
+            'Coahuila': 'Noreste', 'Nuevo León': 'Noreste', 'Tamaulipas': 'Noreste',
+            'Aguascalientes': 'Occidente', 'Colima': 'Occidente', 'Jalisco': 'Occidente', 'Michoacán': 'Occidente', 'Nayarit': 'Occidente', 'Sinaloa': 'Occidente', 'Guanajuato': 'Occidente',
+            'Querétaro': 'Centro', 'San Luis Potosí': 'Centro',
+            'Ciudad de México': 'Centro', 'Estado de México': 'Centro', 'Hidalgo': 'Centro', 'Morelos': 'Centro', 'Puebla': 'Centro', 'Tlaxcala': 'Centro', 'Veracruz': 'Centro',
+            'Campeche': 'Sur', 'Chiapas': 'Sur', 'Guerrero': 'Sur', 'Oaxaca': 'Sur', 'Quintana Roo': 'Sur', 'Tabasco': 'Sur', 'Yucatán': 'Sur',
+            'Nueva York': 'Extranjero'
+        };
+
+        // PROGRAM CONFIGURATION
+        const programasConfig = [
+            { nombre: 'Semilleros Creativos', clase: 'creativos', tipo: 'semillero', isAgrupador: true, icon: SEMILLEROS_SVG, color: '#465293' },
+            { nombre: 'Semilleros Creativos DGVC', clase: 'dgvc', tipo: 'semillero', isSubtype: true, icon: SEMILLEROS_SVG, color: '#0d0887' },
+            { nombre: 'Semilleros de Música', clase: 'musica', tipo: 'semillero', isSubtype: true, icon: 'music', color: '#febd2a' },
+            { nombre: 'Semilleros de Paz', clase: 'paz', tipo: 'semillero', isSubtype: true, icon: 'heart-handshake', color: '#5302a3' },
+            { nombre: 'Semilleros Creativos INPI', clase: 'inpi', tipo: 'semillero', isSubtype: true, icon: INPI_SVG, color: '#db5c68' },
+            { nombre: 'Convite Cultural', clase: 'convites', tipo: 'convite', icon: CONVITES_SVG, color: '#a34cfa' },
+            { nombre: 'Cine Sillita', clase: 'cine', tipo: 'cine', icon: 'film', color: '#a57f2c' },
+            { nombre: 'PAICE 24', clase: 'paice24', tipo: 'paice', icon: 'landmark', color: '#8b0aa5' },
+            { nombre: 'PAICE 25', clase: 'paice25', tipo: 'paice', icon: 'landmark', color: '#32CD32' }
+        ];
+        
+        // --- NEW CSV URLS ---
+        const CSV_MAPA_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSkVT3v699u842WMqs0oPyu6IWCQNcznz7GZEaWvQ6JkoFnhCJbXbCXeahImszZAnvj0edmzS1dohgd/pub?gid=1605868655&single=true&output=csv';
+        const CSV_REPORTE_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSkVT3v699u842WMqs0oPyu6IWCQNcznz7GZEaWvQ6JkoFnhCJbXbCXeahImszZAnvj0edmzS1dohgd/pub?gid=0&single=true&output=csv';
+
+        // === FETCH CON FALLBACK PARA CORS ===
+        async function fetchWithFallback(url) {
+            try {
+                const response = await fetch(url);
+                const text = await response.text();
+                // Check if Google returned an HTML error/login page instead of CSV
+                if (text.trim().startsWith('<!DOCTYPE html') || text.includes('google-site-verification')) {
+                    throw new Error('Google Sheets retornó una página de login (el archivo no es público).');
+                }
+                return text;
+            } catch (e) {
+                console.warn('Direct fetch failed, trying proxy...', e);
+                const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+                const proxyResponse = await fetch(proxyUrl);
+                if (!proxyResponse.ok) throw new Error('Proxy failed');
+                const text = await proxyResponse.text();
+                 if (text.trim().startsWith('<!DOCTYPE html') || text.includes('google-site-verification')) {
+                    throw new Error('El archivo no está publicado en la web (Archivo > Compartir > Publicar en la web).');
+                }
+                return text;
+            }
+        }
+
+        // === HELPER: NORMALIZE KEYS ===
+        function normalizeKeys(dataArray) {
+            return dataArray.map(row => {
+                const newRow = {};
+                Object.keys(row).forEach(key => {
+                    const cleanKey = key.trim().toLowerCase();
+                    newRow[cleanKey] = row[key];
+                    // Keep original key too
+                    newRow[key] = row[key]; 
+                });
+                return newRow;
+            });
+        }
+
+        async function cargarDatos() {
+            try {
+                console.log("Iniciando descarga de CSVs...");
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('loading').textContent = 'Conectando con Google Sheets...';
+                
+                const [textMapa, textReporte] = await Promise.all([
+                    fetchWithFallback(CSV_MAPA_URL),
+                    fetchWithFallback(CSV_REPORTE_URL)
+                ]);
+
+                setTimeout(() => {
+                    procesarCSVs(textMapa, textReporte);
+                }, 50);
+
+            } catch (error) {
+                console.error("Error cargando CSVs:", error);
+                document.getElementById('loading').style.display = 'none';
+                const errorDiv = document.getElementById('error-message');
+                errorDiv.style.display = 'block';
+                errorDiv.innerHTML = `
+                    <strong>No se pudieron cargar los datos.</strong><br>
+                    ${error.message}<br><br>
+                    <em>Asegúrate de ir a "Archivo > Compartir > Publicar en la web" en tu Google Sheet.</em>
+                `;
+            }
+        }
+
+        function procesarCSVs(csvMapa, csvReporte) {
+            try {
+                // --- 1. PROCESAR MAPA (HOJA 1) ---
+                const parsedMapa = Papa.parse(csvMapa, { header: true, dynamicTyping: true, skipEmptyLines: true });
+                let rawData1 = parsedMapa.data;
+                rawData1 = normalizeKeys(rawData1);
+
+                datosOriginales = rawData1.map(row => {
+                     const programa = row.programa || row.Programa || row.PROGRAMA;
+                     const estado = row.estado || row.Estado || row.ESTADO;
+                     
+                     if (!programa && !estado) return null;
+                     
+                     row.Programa = programa; 
+                     row.Estado = estado;
+                     row.Estatus = row.estatus || row.Estatus || row.ESTATUS || '';
+                     
+                     return { type: "Feature", properties: row };
+                }).filter(item => item !== null);
+                
+                // --- 2. PROCESAR REPORTE (HOJA 2 - CONVITES) ---
+                const parsedReporte = Papa.parse(csvReporte, { header: true, dynamicTyping: true, skipEmptyLines: true });
+                let rawData2 = parsedReporte.data;
+                rawData2 = normalizeKeys(rawData2); 
+                
+                // Filter for Convites
+                datosConvites = rawData2.filter(row => {
+                     const proyecto = row.proyecto || row.Proyecto || '';
+                     return String(proyecto).toLowerCase().includes('convite');
+                });
+                
+                // Initialize App
+                procesarDatosMapa(datosOriginales);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('content').style.display = 'block';
+
+            } catch (e) {
+                console.error("Error procesando CSV:", e);
+                document.getElementById('loading').textContent = 'Error procesando datos: ' + e.message;
+            }
+        }
+
+        function procesarDatosMapa(features) {
+            // Pre-process standard map data
+            features.forEach(f => {
+                const props = f.properties;
+                const estado = props.Estado;
+                const programa = props.Programa;
+                
+                props.Region = REGIONES_MAP[estado] || 'Desconocida';
+                
+                if (programa === 'Semilleros Creativos') props.Programa = 'Semilleros Creativos DGVC';
+                
+                if (!props['Proyecto PAICE']) {
+                    props['Proyecto PAICE'] = props['proyecto paice'] || props['Proyecto_PAICE'] || props['proyecto_paice'];
+                }
+            });
+
+            datosFiltrados = [...features];
+            inicializarFiltros();
+            renderView();
+        }
+
+        function inicializarFiltros() {
+            const programasDeFiltro = programasConfig.filter(p => !p.isSubtype).map(p => p.nombre);
+            filtroPrograma.innerHTML = '<option value="">Todos</option>';
+            programasDeFiltro.forEach(p => {
+                const option = document.createElement('option');
+                option.value = p;
+                option.textContent = p;
+                filtroPrograma.appendChild(option);
+            });
+
+            const regionesUnicas = [...new Set(Object.values(REGIONES_MAP))].filter(r => r !== 'Extranjero').sort();
+            filtroRegion.innerHTML = '<option value="">Todas</option>';
+            regionesUnicas.forEach(r => {
+                const option = document.createElement('option');
+                option.value = r;
+                option.textContent = r;
+                filtroRegion.appendChild(option);
+            });
+
+            actualizarEstados(datosOriginales);
+
+            filtroPrograma.addEventListener('change', (e) => {
+                filtroSubtipo.value = '';
+                isHomeView = e.target.value === '';
+                aplicarFiltros();
+                if (filtroRegion.value === '') actualizarEstados(e.target.value === '' ? datosOriginales : datosFiltrados); 
+                cerrarSidebarEnMovil();
+            });
+
+            filtroRegion.addEventListener('change', () => {
+                filtroEstado.value = '';
+                aplicarFiltros();
+                actualizarEstados(datosOriginales); 
+                cerrarSidebarEnMovil();
+            });
+
+            filtroEstado.addEventListener('change', () => {
+                filtroRegion.value = '';
+                aplicarFiltros();
+                cerrarSidebarEnMovil();
+            });
+        }
+
+        function actualizarEstados(data) {
+            const regionSeleccionada = filtroRegion.value;
+            const estadoSeleccionado = filtroEstado.value;
+            let estados = [];
+            
+            if (regionSeleccionada) {
+                estados = Object.keys(REGIONES_MAP).filter(estado => REGIONES_MAP[estado] === regionSeleccionada).sort();
+            } else {
+                estados = [...new Set(data.filter(f => f.properties.Estado !== 'Nueva York').map(f => f.properties.Estado))].sort();
+            }
+
+            filtroEstado.innerHTML = '<option value="">Todos</option>';
+            estados.forEach(e => {
+                const option = document.createElement('option');
+                option.value = e;
+                option.textContent = e;
+                filtroEstado.appendChild(option);
+            });
+            filtroEstado.value = estadoSeleccionado;
+        }
+
+        function aplicarFiltros() {
+            const programa = filtroPrograma.value;
+            const subtipo = filtroSubtipo.value;
+            const region = filtroRegion.value;
+            const estado = filtroEstado.value;
+            
+            datosFiltrados = datosOriginales.filter(feature => {
+                const props = feature.properties;
+                if (programa === 'Semilleros Creativos') {
+                    if (subtipo) {
+                        if (props.Programa !== subtipo) return false;
+                    } else {
+                        if (!props.Programa.includes('Semilleros')) return false;
+                    }
+                } else if (programa && props.Programa !== programa) {
+                    return false;
+                }
+                if (region && !estado && props.Region !== region) return false;
+                if (estado && props.Estado !== estado) return false;
+                return true;
+            });
+            renderView();
+        }
+
+        function renderView() {
+            homeButton.style.display = isHomeView ? 'none' : 'block';
+            backButton.style.display = isHomeView ? 'none' : 'flex';
+
+            if (isHomeView) {
+                const hayFiltrosActivos = filtroRegion.value || filtroEstado.value;
+                renderHomeView(hayFiltrosActivos);
+            } else {
+                renderProgramDetailView();
+            }
+            
+            if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                lucide.createIcons();
+            }
+        }
+
+        function renderHomeView(aplicarFiltroActivo = false) {
+            document.getElementById('home-view').style.display = 'block';
+            document.getElementById('program-detail-view').style.display = 'none';
+            document.getElementById('main-title').textContent = 'Tablero de actividades DGVC';
+            document.getElementById('main-subtitle').textContent = 'Da clic para conocer más información';
+
+            const dataToCount = aplicarFiltroActivo ? datosFiltrados : datosOriginales;
+            const counts = getHomeCounts(dataToCount);
+                
+            document.getElementById('total-semilleros-home').textContent = counts.semilleros;
+            document.getElementById('total-convites-home').textContent = counts.convites;
+            document.getElementById('total-cine-home').textContent = counts.cine;
+            document.getElementById('total-paice24-home').textContent = counts.paice24;
+            document.getElementById('total-paice25-home').textContent = counts.paice25;
+            document.getElementById('estados-atendidos-home').textContent = counts.estados;
+            document.getElementById('municipios-atendidos-home').textContent = counts.municipios;
+        }
+
+        function getHomeCounts(data) {
+            const totals = {};
+            totals.semilleros = data.filter(f => f.properties.Programa.includes('Semilleros')).length;
+            
+            // CONVITES LOGIC - STRICT "ACTIVO" CHECK
+            if (datosConvites.length > 0) {
+                 totals.convites = datosConvites.filter(r => {
+                     // Try all possible keys for 'estatus'
+                     const st = r.estatus || r.Estatus || r.ESTATUS || '';
+                     return st.toString().trim().toLowerCase() === 'activo';
+                 }).length;
+            } else {
+                 totals.convites = data.filter(f => {
+                     const prog = f.properties.Programa;
+                     const stat = f.properties.Estatus || '';
+                     return prog === 'Convite Cultural' && stat.toLowerCase() === 'activo';
+                 }).length;
+            }
+            
+            totals.cine = data.filter(f => {
+                const prog = f.properties.Programa;
+                const stat = f.properties.Estatus || '';
+                return prog === 'Cine Sillita' && stat.toLowerCase() === 'activo';
+            }).length;
+
+            totals.paice24 = data.filter(f => f.properties.Programa === 'PAICE 24').length;
+            totals.paice25 = data.filter(f => f.properties.Programa === 'PAICE 25').length;
+            
+            totals.estados = new Set(data.filter(f => f.properties.Estado !== 'Nueva York' && (f.properties.Estatus || '').toLowerCase() !== 'inactivo').map(f => f.properties.Estado)).size;
+            
+            totals.municipios = new Set(data.filter(f => {
+                 const muni = f.properties['Municipio Concatenado'] || f.properties['municipio concatenado'];
+                 const est = f.properties.Estado;
+                 const stat = f.properties.Estatus || '';
+                 return muni && est !== 'Nueva York' && stat.toLowerCase() !== 'inactivo';
+            }).map(f => f.properties['Municipio Concatenado'] || f.properties['municipio concatenado'])).size;
+            
+            return totals;
+        }
+
+        function renderProgramDetailView() {
+            document.getElementById('home-view').style.display = 'none';
+            document.getElementById('program-detail-view').style.display = 'block';
+
+            const programaSeleccionado = filtroPrograma.value;
+            const subtipoSeleccionado = filtroSubtipo.value;
+            let displayTitle = subtipoSeleccionado || programaSeleccionado;
+            
+            if (displayTitle === 'Convite Cultural') displayTitle = 'Convites Culturales';
+            if (displayTitle === 'Cine Sillita') displayTitle = 'Cine Sillitas';
+
+            document.getElementById('main-title').textContent = displayTitle;
+            document.getElementById('main-subtitle').textContent = `Detalle de ${displayTitle}`;
+            document.getElementById('program-featured-label').textContent = displayTitle;
+
+            const programaConfig = subtipoSeleccionado 
+                ? programasConfig.find(p => p.nombre === subtipoSeleccionado)
+                : programasConfig.find(p => p.nombre === programaSeleccionado);
+
+            if (programaConfig) {
+                featuredCard.style.backgroundColor = programaConfig.color;
+                if (programaSeleccionado === 'Semilleros Creativos' && !subtipoSeleccionado) {
+                    featuredCard.style.backgroundColor = '#465293'; 
+                }
+                
+                let iconHtml = programaConfig.icon;
+                if (programaConfig.icon.startsWith('<svg')) {
+                    if (programaConfig.nombre !== 'Convite Cultural' && programaConfig.icon.includes('fill:#465293')) {
+                        iconHtml = iconHtml.replace(/fill:#[0-9a-fA-F]{6}/gi, 'fill:#ffffff');
+                    }
+                    programFeaturedIcon.innerHTML = iconHtml;
+                    if (programaConfig.icon === SEMILLEROS_SVG) programFeaturedIcon.classList.add('custom-logo-xl');
+                    else programFeaturedIcon.classList.remove('custom-logo-xl');
+                } else if (programaConfig.icon.endsWith('.jpg') || programaConfig.icon.endsWith('.png')) {
+                    programFeaturedIcon.innerHTML = `<img src="${programaConfig.icon}" alt="${displayTitle}">`;
+                    programFeaturedIcon.classList.remove('custom-logo-xl');
+                } else {
+                    programFeaturedIcon.innerHTML = `<i data-lucide="${programaConfig.icon}"></i>`;
+                    programFeaturedIcon.classList.remove('custom-logo-xl');
+                }
+            }
+
+            const isConvites = (programaSeleccionado === 'Convite Cultural');
+            
+            let mainCount = 0;
+            let legendText = "registros totales";
+            
+            if (isConvites) {
+                // Main Count: Only "Activo"
+                mainCount = datosConvites.filter(r => {
+                     const st = r.estatus || r.Estatus || r.ESTATUS || '';
+                     return st.toString().trim().toLowerCase() === 'activo';
+                }).length;
+                
+                // Legend: Total Historic
+                const totalHistorico = datosConvites.length;
+                legendText = `A lo largo del año se han realizado ${totalHistorico} Convites`;
+                document.getElementById('program-featured-unit').textContent = legendText;
+
+            } else {
+                mainCount = datosFiltrados.length;
+                legendText = "registros totales";
+                 document.getElementById('program-featured-unit').textContent = legendText;
+            }
+            
+            document.getElementById('program-featured-value').textContent = mainCount;
+            
+
+            const metricsContainer = document.getElementById('metrics-cards');
+            metricsContainer.innerHTML = '';
+            
+            if (isConvites) {
+                const publico = datosConvites.reduce((sum, r) => {
+                    const key = r['cantidad público'] ? 'cantidad público' : 'Cantidad Público';
+                    const val = typeof r[key] === 'string' 
+                        ? parseInt(r[key].replace(/,/g, '')) 
+                        : r[key];
+                    return sum + (val || 0);
+                }, 0);
+                
+                const sesiones = datosConvites.reduce((sum, r) => {
+                    const key = r['sesiones'] ? 'sesiones' : 'Sesiones';
+                    const val = typeof r[key] === 'string'
+                        ? parseInt(r[key].replace(/,/g, ''))
+                        : r[key];
+                     return sum + (val || 0);
+                }, 0);
+                
+                const promedio = sesiones > 0 ? (publico / sesiones).toFixed(1) : "0";
+                
+                const estadosCount = new Set(datosConvites.map(r => r.entidad || r.Entidad).filter(e => e)).size;
+                const municipiosCount = new Set(datosConvites.map(r => r.municipio || r.Municipio).filter(m => m)).size;
+
+                 metricsContainer.innerHTML = `
+                    <div class="card"><div class="card-header-row"><div class="card-label label-blue">Público participante</div><div class="card-icon icon-blue"><i data-lucide="users"></i></div></div><div class="card-content"><div class="card-value">${publico.toLocaleString('es-MX')}</div></div></div>
+                    <div class="card"><div class="card-header-row"><div class="card-label label-purple">Sesiones realizadas</div><div class="card-icon icon-purple"><i data-lucide="calendar-days"></i></div></div><div class="card-content"><div class="card-value">${sesiones.toLocaleString('es-MX')}</div></div></div>
+                    <div class="card"><div class="card-header-row"><div class="card-label label-pink">Promedio participación</div><div class="card-icon icon-pink"><i data-lucide="bar-chart-3"></i></div></div><div class="card-content"><div class="card-value">${promedio}</div><div class="card-unit">pers. por sesión</div></div></div>
+                    <div class="card metric-link"><div class="card-header-row"><div class="card-label">Estados</div><div class="card-icon"><i data-lucide="map-pin"></i></div></div><div class="card-content"><div class="card-value">${estadosCount}</div></div></div>
+                    <div class="card metric-link"><div class="card-header-row"><div class="card-label">Municipios</div><div class="card-icon"><i data-lucide="navigation"></i></div></div><div class="card-content"><div class="card-value">${municipiosCount}</div></div></div>
+                `;
+            } else {
+                const tipo = programaConfig ? programaConfig.tipo : 'semillero';
+                const estadosUnicos = new Set(datosFiltrados.filter(f => f.properties.Estado && f.properties.Estado !== 'Nueva York' && (f.properties.Estatus||'').toLowerCase() !== 'inactivo').map(f => f.properties.Estado));
+                
+                const municipiosUnicos = new Set(datosFiltrados.filter(f => {
+                    const m = f.properties['Municipio Concatenado'] || f.properties['municipio concatenado'];
+                    const st = f.properties.Estatus || '';
+                    return m && f.properties.Estado !== 'Nueva York' && st.toLowerCase() !== 'inactivo';
+                }).map(f => f.properties['Municipio Concatenado'] || f.properties['municipio concatenado']));
+
+                let html = '';
+                if (tipo === 'semillero') {
+                    const participantes = datosFiltrados.reduce((sum, f) => {
+                        const p = f.properties;
+                        const k = p['cantidad de participantes'] ? 'cantidad de participantes' : 'Cantidad de participantes';
+                        return sum + (parseInt(p[k]) || 0);
+                    }, 0);
+                    html += `<div class="card"><div class="card-header-row"><div class="card-label label-blue">Participantes</div><div class="card-icon icon-blue"><i data-lucide="users"></i></div></div><div class="card-content"><div class="card-value">${participantes.toLocaleString('es-MX')}</div></div></div>`;
+                } else if (tipo === 'cine') {
+                     const publico = datosFiltrados.reduce((sum, f) => {
+                         const p = f.properties;
+                         const k = p['cantidad de público participante'] ? 'cantidad de público participante' : 'Cantidad de público participante';
+                         return sum + (parseInt(p[k]) || 0);
+                     }, 0);
+                     const sesiones = datosFiltrados.reduce((sum, f) => {
+                         const p = f.properties;
+                         const k = p['número de sesiones'] ? 'número de sesiones' : 'Número de sesiones';
+                         return sum + (parseInt(p[k]) || 0);
+                     }, 0);
+                     html += `
+                        <div class="card"><div class="card-header-row"><div class="card-label label-blue">Público participante</div><div class="card-icon icon-blue"><i data-lucide="users"></i></div></div><div class="card-content"><div class="card-value">${publico.toLocaleString('es-MX')}</div></div></div>
+                        <div class="card"><div class="card-header-row"><div class="card-label label-purple">Sesiones realizadas</div><div class="card-icon icon-purple"><i data-lucide="calendar-days"></i></div></div><div class="card-content"><div class="card-value">${sesiones.toLocaleString('es-MX')}</div></div></div>
+                    `;
+                }
+                
+                html += `
+                    <div class="card metric-link" onclick="mostrarListado('estados')"><div class="card-header-row"><div class="card-label">Estados</div><div class="card-icon"><i data-lucide="map-pin"></i></div></div><div class="card-content"><div class="card-value">${estadosUnicos.size}</div></div></div>
+                    <div class="card metric-link" onclick="mostrarListado('municipios')"><div class="card-header-row"><div class="card-label">Municipios</div><div class="card-icon"><i data-lucide="navigation"></i></div></div><div class="card-content"><div class="card-value">${municipiosUnicos.size}</div></div></div>
+                `;
+                metricsContainer.innerHTML = html;
+            }
+
+            const programCardsContainer = document.getElementById('program-cards-detailed');
+            programCardsContainer.innerHTML = '';
+            
+            if (!isConvites) { 
+                if (programaSeleccionado === 'PAICE 24' || programaSeleccionado === 'PAICE 25') {
+                     const conteoProyectos = {};
+                     datosFiltrados.forEach(f => {
+                         const tipo = f.properties['Proyecto PAICE'] || 'Sin clasificar';
+                         conteoProyectos[tipo] = (conteoProyectos[tipo] || 0) + 1;
+                     });
+                     Object.keys(conteoProyectos).sort().forEach(tipo => {
+                         const card = document.createElement('div');
+                         card.className = 'program-card';
+                         const color = programaConfig ? programaConfig.color : '#8e8e93';
+                         card.style.borderLeft = `4px solid ${color}`;
+                         card.innerHTML = `
+                            <div style="display:flex; justify-content:space-between;">
+                                <div class="program-name" style="color: ${color}">${tipo}</div>
+                                <div class="card-icon" style="color: ${color}"><i data-lucide="folder"></i></div>
+                            </div>
+                            <div class="program-value">${conteoProyectos[tipo]}</div>
+                         `;
+                         programCardsContainer.appendChild(card);
+                     });
+                     programCardsContainer.style.display = 'grid';
+                } else if (programaSeleccionado === 'Semilleros Creativos' && !subtipoSeleccionado) {
+                    const subtipos = programasConfig.filter(p => p.isSubtype).map(p => p.nombre);
+                    renderSubtypeCards(programCardsContainer, subtipos);
+                    programCardsContainer.style.display = 'grid';
+                } else {
+                    programCardsContainer.style.display = 'none';
+                }
+            } else {
+                 programCardsContainer.style.display = 'none';
+            }
+
+            tablaBuscador.value = '';
+            if (isConvites) {
+                renderTableConvites();
+            } else {
+                const tipo = programaConfig ? programaConfig.tipo : 'semillero';
+                renderTableStandard(tipo, programaSeleccionado);
+            }
+
+            if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                lucide.createIcons();
+            }
+        }
+
+        function renderSubtypeCards(container, subtipos) {
+             subtipos.forEach(subtipoNombre => {
+                const config = programasConfig.find(p => p.nombre === subtipoNombre);
+                const count = datosFiltrados.filter(f => f.properties.Programa === subtipoNombre).length;
+                const card = document.createElement('div');
+                card.className = `program-card`;
+                card.onclick = () => filtrarPorSubtipo(subtipoNombre);
+                card.style.borderLeft = `4px solid ${config.color}`;
+                
+                let iconHtml = config.icon;
+                let extraClass = '';
+                if (config.icon.startsWith('<svg')) {
+                    if (config.icon.includes('fill:#465293')) {
+                         iconHtml = config.icon.replace('fill:#465293', `fill:${config.color}`);
+                         extraClass = ' custom-logo-xl'; 
+                    }
+                } else if (config.icon.endsWith('.jpg') || config.icon.endsWith('.png')) {
+                    iconHtml = `<img src="${config.icon}" alt="${subtipoNombre}">`;
+                } else {
+                    iconHtml = `<i data-lucide="${config.icon}"></i>`;
+                }
+
+                card.innerHTML = `
+                    <div style="display:flex; justify-content:space-between;">
+                        <div class="program-name" style="color: ${config.color}">${subtipoNombre}</div>
+                        <div class="card-icon${extraClass}" style="color: ${config.color}">${iconHtml}</div>
+                    </div>
+                    <div class="program-value">${count}</div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function renderTableConvites() {
+            const thead = document.querySelector('#data-table thead');
+            const tbody = document.querySelector('#data-table tbody');
+            tbody.innerHTML = '';
+            thead.innerHTML = '';
+            
+            const headers = [
+                'Proyecto', 'Actividad', 'Entidad', 'Municipio', 
+                'Localidad', 'Nombre', 'Inicio', 'Conclusión', 
+                'Tipo Actividad', 'Clase', 'Estatus', 'Sesiones', 'Público'
+            ];
+            
+            const headerRow = document.createElement('tr');
+            headers.forEach(text => {
+                const th = document.createElement('th');
+                th.textContent = text;
+                headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+
+            currentTableData = [...datosConvites]; 
+            renderTableRowsConvites(currentTableData);
+        }
+
+        function renderTableRowsConvites(data) {
+             const tbody = document.querySelector('#data-table tbody');
+             tbody.innerHTML = '';
+             
+             data.forEach(row => {
+                 const tr = document.createElement('tr');
+                 tr.innerHTML = `
+                    <td>${row.proyecto || row.Proyecto || ''}</td>
+                    <td>${row.actividad || row.Actividad || ''}</td>
+                    <td>${row.entidad || row.Entidad || ''}</td>
+                    <td>${row.municipio || row.Municipio || ''}</td>
+                    <td>${row.localidad || row.Localidad || ''}</td>
+                    <td><div class="table-cell-content">${row.nombre || row.Nombre || ''}</div></td>
+                    <td>${row['fecha de inicio'] || row['Fecha de inicio'] || ''}</td>
+                    <td>${row['fecha de conclusión'] || row['Fecha de conclusión'] || ''}</td>
+                    <td>${row['tipo de actividad'] || row['Tipo de actividad'] || ''}</td>
+                    <td>${row['clase de actividad'] || row['Clase de Actividad'] || ''}</td>
+                    <td>${row.estatus || row.Estatus || ''}</td>
+                    <td>${row.sesiones || row.Sesiones || 0}</td>
+                    <td>${row['cantidad público'] || row['Cantidad Público'] || 0}</td>
+                 `;
+                 tbody.appendChild(tr);
+             });
+        }
+
+        function renderTableStandard(tipo, programa) {
+            const thead = document.querySelector('#data-table thead');
+            const tbody = document.querySelector('#data-table tbody');
+            tbody.innerHTML = '';
+            thead.innerHTML = '';
+
+            let headers = [
+                'Programa', 'Nombre', 'Estado', 'Municipio', 
+                'Localidad', 'Dirección', 'Horario', 'Año', 'Región', 'Estatus'
+            ];
+            
+            if (programa && (programa.includes('PAICE'))) {
+                headers.push('Proyecto PAICE'); 
+            } else if (tipo === 'semillero') {
+                headers.push('Participantes');
+            } else if (tipo === 'cine') { 
+                headers.push('Público', 'Sesiones');
+            }
+            
+            const headerRow = document.createElement('tr');
+            headers.forEach(text => {
+                const th = document.createElement('th');
+                th.textContent = text;
+                headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+
+            currentTableData = [...datosFiltrados].sort((a, b) => (a.properties.Estado || '').localeCompare(b.properties.Estado || ''));
+            renderTableRowsStandard(currentTableData, tipo, programa);
+        }
+
+        function renderTableRowsStandard(data, tipo, programa) {
+            const tbody = document.querySelector('#data-table tbody');
+            tbody.innerHTML = '';
+            
+            data.forEach(f => {
+                const tr = document.createElement('tr');
+                const p = f.properties;
+                const nombre = p['Nombre del semillero'] || p['nombre del semillero'] || p['Nombre del proyecto'] || p['nombre del proyecto'] || 'Sin nombre';
+                const dir = p.Direcciones || p.direcciones || p.Direccion || p.direccion || p.Dirección || '';
+                const horario = p.Horario || p.horario || p.Horarios || '';
+                const anio = p['Año de creación'] || p['año de creación'] || p.Anio_creacion || '';
+                
+                let html = `
+                    <td>${p.Programa || ''}</td>
+                    <td><div class="table-cell-content">${nombre}</div></td>
+                    <td>${p.Estado || ''}</td>
+                    <td>${p.Municipio || ''}</td>
+                    <td>${p.Localidad || ''}</td>
+                    <td><div class="table-cell-content">${dir}</div></td>
+                    <td>${horario}</td>
+                    <td>${anio}</td>
+                    <td>${p.Region || ''}</td>
+                    <td>${p.Estatus || ''}</td>
+                `;
+                
+                if (programa && (programa.includes('PAICE'))) {
+                     html += `<td>${p['Proyecto PAICE'] || '-'}</td>`;
+                } else if (tipo === 'semillero') {
+                    const parts = p['Cantidad de participantes'] || p['cantidad de participantes'] || 0;
+                    html += `<td>${parseInt(parts) || 0}</td>`;
+                } else if (tipo === 'cine') {
+                    const pub = p['Cantidad de público participante'] || p['cantidad de público participante'] || 0;
+                    const ses = p['Número de sesiones'] || p['número de sesiones'] || 0;
+                    html += `<td>${parseInt(pub) || 0}</td>
+                             <td>${parseInt(ses) || 0}</td>`;
+                }
+                tr.innerHTML = html;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function filtrarTabla(texto) {
+            const term = texto.toLowerCase();
+            const programa = filtroSubtipo.value || filtroPrograma.value;
+            
+            if (programa === 'Convite Cultural') {
+                 const filtered = datosConvites.filter(row => {
+                     const getStr = (val) => (val || '').toString().toLowerCase();
+                     return getStr(row.proyecto || row.Proyecto).includes(term) ||
+                            getStr(row.nombre || row.Nombre).includes(term) ||
+                            getStr(row.entidad || row.Entidad).includes(term) ||
+                            getStr(row.municipio || row.Municipio).includes(term);
+                 });
+                 renderTableRowsConvites(filtered);
+
+            } else {
+                const config = programasConfig.find(p => p.nombre === programa);
+                const tipo = config ? config.tipo : 'semillero';
+                
+                const filtered = datosFiltrados.filter(f => {
+                    const p = f.properties;
+                    const getStr = (val) => (val || '').toString().toLowerCase();
+                    const nombre = p['Nombre del semillero'] || p['nombre del semillero'] || p['Nombre del proyecto'] || p['nombre del proyecto'] || '';
+                    
+                    return getStr(p.Programa).includes(term) ||
+                           getStr(nombre).includes(term) ||
+                           getStr(p.Estado).includes(term) ||
+                           getStr(p.Municipio).includes(term);
+                });
+                renderTableRowsStandard(filtered, tipo, programa);
+            }
+        }
+
+        function descargarExcel() {
+            const programaActual = filtroSubtipo.value || filtroPrograma.value;
+            let dataToExport;
+
+            if (programaActual === 'Convite Cultural') {
+                 dataToExport = currentTableData; 
+            } else {
+                const config = programasConfig.find(p => p.nombre === programaActual);
+                const tipo = config ? config.tipo : 'semillero';
+                const esPAICE = programaActual && programaActual.includes('PAICE');
+
+                dataToExport = datosFiltrados.map(f => {
+                    const p = f.properties;
+                    let fila = {
+                        'Programa': p.Programa,
+                        'Nombre': p['Nombre del semillero'] || p['nombre del semillero'] || p['Nombre del proyecto'] || p['nombre del proyecto'] || 'Sin nombre',
+                        'Estado': p.Estado,
+                        'Municipio': p.Municipio,
+                        'Localidad': p.Localidad || '',
+                        'Dirección': p.Direcciones || p.direcciones || p.Direccion || '',
+                        'Horario': p.Horario || p.horario || '',
+                        'Año de creación': p['Año de creación'] || p.Anio_creacion || '',
+                        'Región': p.Region,
+                        'Estatus': p.Estatus || ''
+                    };
+                    if (esPAICE) fila['Proyecto PAICE'] = p['Proyecto PAICE'] || '';
+                    else if (tipo === 'semillero') fila['Participantes'] = parseInt(p['Cantidad de participantes'] || p['cantidad de participantes']) || 0;
+                    else if (tipo === 'cine') {
+                        fila['Público Participante'] = parseInt(p['Cantidad de público participante'] || p['cantidad de público participante']) || 0;
+                        fila['Sesiones'] = parseInt(p['Número de sesiones'] || p['número de sesiones']) || 0;
+                    }
+                    return fila;
+                });
+            }
+            
+            const ws = XLSX.utils.json_to_sheet(dataToExport);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Datos Exportados");
+            XLSX.writeFile(wb, `Reporte_${programaActual || 'General'}_${new Date().toISOString().slice(0,10)}.xlsx`);
+        }
+
+        function navegarAPrograma(programa) {
+            filtroPrograma.value = programa;
+            filtroSubtipo.value = ''; 
+            isHomeView = false;
+            aplicarFiltros();
+            if (filtroRegion.value === '') actualizarEstados(datosFiltrados); 
+            cerrarSidebarEnMovil();
+        }
+        
+        function filtrarPorSubtipo(subtipo) {
+            filtroPrograma.value = 'Semilleros Creativos'; 
+            filtroSubtipo.value = subtipo;
+            isHomeView = false;
+            aplicarFiltros();
+            if (filtroRegion.value === '') actualizarEstados(datosFiltrados); 
+            cerrarSidebarEnMovil();
+        }
+        
+        function goBack() {
+            if (filtroSubtipo.value) {
+                filtroSubtipo.value = '';
+                aplicarFiltros();
+                if (filtroRegion.value === '') actualizarEstados(datosFiltrados); 
+            } else if (filtroPrograma.value) {
+                resetearFiltros(); 
+            }
+            cerrarSidebarEnMovil();
+        }
+
+        function mostrarListado(tipo) {
+            let list = [];
+            let titulo = '';
+            
+            const data = datosFiltrados.filter(f => (f.properties.Estatus||'').toLowerCase() !== 'inactivo');
+            
+            if (tipo === 'estados') {
+                list = [...new Set(data.filter(f => f.properties.Estado && f.properties.Estado !== 'Nueva York').map(f => f.properties.Estado))].sort(); 
+                titulo = `Estados Atendidos (${list.length})`;
+            } else if (tipo === 'municipios') {
+                let muniObjects = data.filter(f => {
+                    const m = f.properties['Municipio Concatenado'] || f.properties['municipio concatenado'];
+                    return m && f.properties.Estado !== 'Nueva York';
+                }).map(f => {
+                    const m = f.properties.Municipio;
+                    const e = f.properties.Estado;
+                    return { municipio: m, estado: e, full: `${e} - ${m}` };
+                });
+                muniObjects = [...new Map(muniObjects.map(item => [item.full, item])).values()];
+                muniObjects.sort((a, b) => a.estado.localeCompare(b.estado) || a.municipio.localeCompare(b.municipio));
+                list = muniObjects.map(item => item.full);
+                titulo = `Municipios Atendidos (${list.length})`;
+            }
+            modalTitle.textContent = titulo;
+            modalList.innerHTML = list.map(item => `<li>${item}</li>`).join('');
+            listModal.classList.add('active');
+        }
+
+        function closeModal(event) {
+            if (event.target.classList.contains('modal-overlay') || event.target.classList.contains('modal-close') || event.target.parentNode.classList.contains('modal-close')) {
+                listModal.classList.remove('active');
+            }
+        }
+
+        function cerrarSidebarEnMovil() {
+            if (window.innerWidth <= 768) {
+                sidebar.classList.remove('active');
+                sidebarOverlay.classList.remove('active');
+            }
+        }
+
+        function resetearFiltros() {
+            filtroPrograma.value = '';
+            filtroSubtipo.value = '';
+            filtroRegion.value = '';
+            filtroEstado.value = '';
+            
+            isHomeView = true; 
+            actualizarEstados(datosOriginales);
+            aplicarFiltros(); 
+        }
+
+        function toggleSidebar() {
+            sidebar.classList.toggle('active');
+            sidebarOverlay.classList.toggle('active');
+        }
+
+        cargarDatos();
+    </script>
+</body>
+</html>
